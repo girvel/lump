@@ -63,23 +63,38 @@ fw.test("pass: table references to itself", function()
   fw.assert_equal(result, result.t)
 end)
 
-fw.test("tables as keys", function()
+fw.test("pass: tables as keys", function()
   local t = {}
   t[t] = t
   local result = fw.pass(t)
   fw.assert_equal(result[result], result)
 end)
 
-fw.test("table with metatable", function()
+fw.test("pass: table with metatable", function()
   local t = setmetatable({value = 1}, {__call = function(self) return self.value end})
   fw.assert_equal(1, fw.pass(t)())
 end)
 
-fw.test("function with upvalues (closure)", function()
+fw.test("pass: function with upvalues (closure)", function()
   local a = 1
   local b = 2
   local f = function() return a + b end
   fw.assert_pass(f)
 end)
+
+if debug.upvalueid then
+  fw.test("pass: function with shared upvalues", function()
+    local val = 0
+    local get = function() return val end
+    local set = function(v) val = v end
+    local property = {get = get, set = set}
+
+    local copy = fw.pass(property)
+    copy.set(5)
+    fw.assert_equal(copy.get(), 5)
+    copy.set(7)
+    fw.assert_equal(copy.get(), 7)
+  end)
+end
 
 -- TODO benchmarking facility

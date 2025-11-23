@@ -27,8 +27,6 @@ local write_varint = function(result, x, i)
   end
 end
 
--- TODO inf, NaN
-
 --- @param data string
 --- @param i integer
 --- @return integer, integer
@@ -261,6 +259,21 @@ serializers["function"] = function(result, cache, x)
 
   for i = 1, upvalues_n do
     local _, v = debug.getupvalue(x, i)
+
+    local id
+    if debug.upvalueid then
+      local userdata_id = debug.upvalueid(x, i)
+      id = cache[userdata_id]
+      if not id then
+        cache.size = cache.size + 1
+        cache[userdata_id] = cache.size
+        id = cache.size
+      end
+    else
+      id = 0
+    end
+    write_varint(result, id)
+
     serialize(result, cache, v)
     -- TODO handle _ENV
     -- TODO handle joined upvalues
@@ -372,9 +385,23 @@ deserializers[FUNCTION] = function(data, cache, i)
   upvalues_n, i = read_varint(data, i)
 
   for j = 1, upvalues_n do
+    local upvalue_cache_id
+    upvalue_cache_id, i = read_varint(data, i)
+
     local upvalue
     upvalue, i = deserialize(data, cache, i)
     debug.setupvalue(result, j, upvalue)
+
+    if upvalue_cache_id ~= 0 then
+      -- TODO warning/error when deserializing id ~= 0 on lua with no debug.upvalueid
+      local tuple = cache[upvalue_cache_id]
+      if tuple then
+        local f, f_i = unpack(tuple)
+        debug.upvaluejoin(result, j, f, f_i)
+      else
+        cache[upvalue_cache_id] = {result, j}
+      end
+    end
   end
 
   return result, i
