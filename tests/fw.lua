@@ -102,7 +102,7 @@ fw.run = function(tests)
     end
   end
 
-  print(("\n[Passed: %s/%s]"):format(total, passed))
+  print(("\n[Passed: %s/%s]"):format(passed, total))
   os.exit(passed == total and 0 or 1)
 end
 
