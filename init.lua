@@ -56,14 +56,30 @@ local read_double = function(data, i)
   return sign * (1 + mantissa / 2^52) * 2^exponent, i + 8
 end
 
+local NIL = 0x00
+local FALSE = 0x01
+local TRUE = 0x02
+local ZERO = 0x03
+local ONE = 0x04
 local NUMBER = 0x12
 local STRING = 0x20
+local TABLE = 0x22
 
 local serializers = {}
+
+-- serializers["nil"] = 
 
 --- @param result number[]
 --- @param x number
 serializers.number = function(result, x)
+  if x == 0 then
+    table.insert(result, ZERO)
+    return
+  elseif x == 1 then
+    table.insert(result, ONE)
+    return
+  end
+
   table.insert(result, NUMBER)
   write_double(result, x)
 end
@@ -78,14 +94,15 @@ serializers.string = function(result, x)
   end
 end
 
+--- @type table<integer, fun(data: string, i: integer): any, integer>
 local deserializers = {}
 
---- @param data string
---- @param i integer
---- @return number, integer
 deserializers[NUMBER] = function(data, i)
   return read_double(data, i)
 end
+
+deserializers[ZERO] = function(_, i) return 0, i end
+deserializers[ONE] = function(_, i) return 1, i end
 
 lump_mt.__call = function(_, value)
   local result = {string.byte("LUMP", 1, 4)}

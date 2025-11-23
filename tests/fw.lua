@@ -32,7 +32,7 @@ fw.test = function(name, test)
   if ok then
     print("+")
   else
-    print(("-\n---\n%s\n---"):format(msg))
+    print(("-\n  %s"):format(msg))
   end
 end
 
