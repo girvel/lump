@@ -3,9 +3,48 @@
 local lump_mt = {}
 local lump = setmetatable({}, lump_mt)
 
---- @param result number[]
+--- @param result integer[]
+--- @param x integer
+--- @param i? integer
+local write_varint = function(result, x, i)
+  i = i or #result + 1  -- TODO maybe remove i arguments?
+  while true do
+    local item = x % 128
+    x = math.floor(x / 128)
+    if x == 0 then
+      result[i] = item
+      break
+    else
+      result[i] = 128 + item
+      i = i + 1
+    end
+  end
+end
+
+-- TODO inf, NaN
+
+--- @param data string
+--- @param i integer
+--- @return integer, integer
+local read_varint = function(data, i)
+  local result = 0
+  while true do
+    local byte = data:byte(i)
+    i = i + 1
+
+    if byte < 128 then
+      result = result * 128 + byte
+      break
+    else
+      result = result * 128 + byte - 128
+    end
+  end
+  return result, i
+end
+
+--- @param result integer[]
 --- @param x number
---- @param i? number
+--- @param i? integer
 local write_double = function(result, x, i)
   i = i or #result + 1
 
@@ -66,6 +105,7 @@ local FALSE = 0x01
 local TRUE = 0x02
 local ZERO = 0x03
 local ONE = 0x04
+local VARINT = 0x11
 local NUMBER = 0x12
 local STRING = 0x20
 local TABLE = 0x22
@@ -93,6 +133,10 @@ serializers.number = function(result, x)
     return
   elseif x == 1 then
     table.insert(result, ONE)
+    return
+  elseif x > 0 and x % 1 == 0 then
+    table.insert(result, VARINT)
+    write_varint(result, x)
     return
   end
 
@@ -146,6 +190,10 @@ deserializers[FALSE] = function(_, i) return false, i end
 
 deserializers[NUMBER] = function(data, i)
   return read_double(data, i)
+end
+
+deserializers[VARINT] = function(data, i)
+  return read_varint(data, i)
 end
 
 deserializers[STRING] = function(data, i)

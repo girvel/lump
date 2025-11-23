@@ -39,11 +39,14 @@ end
 --- @param x any
 fw.pass = function(x)
   local lump = require("init")
-  local copy = lump.deserialize(lump(x))
+  local dump = lump(x)
+  local copy = lump.deserialize(dump)
   if type(x) == "table" then
     assert_same(copy, x)
   else
-    assert(copy == x)
+    if copy ~= x then
+      error(("Expected %s to stay the same, got %s instead\n%s"):format(x, copy, fw.to_hex(dump)))
+    end
   end
 end
 
