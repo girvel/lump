@@ -251,6 +251,20 @@ serializers["function"] = function(result, cache, x)
   for i = 1, len do
     table.insert(result, dump:byte(i))
   end
+
+  local upvalues_n = 0
+  while debug.getupvalue(x, upvalues_n + 1) do
+    upvalues_n = upvalues_n + 1
+  end
+
+  write_varint(result, upvalues_n)
+
+  for i = 1, upvalues_n do
+    local _, v = debug.getupvalue(x, i)
+    serialize(result, cache, v)
+    -- TODO handle _ENV
+    -- TODO handle joined upvalues
+  end
 end
 
 --- @alias deserialization_cache table<integer, any>
@@ -350,10 +364,20 @@ deserializers[FUNCTION] = function(data, cache, i)
   local size
   size, i = read_varint(data, i)
 
-  local result = load(data:sub(i, i + size - 1))
+  local result = assert(load(data:sub(i, i + size - 1)))
+  i = i + size
   cache[cache_id] = result
 
-  return result, i + size
+  local upvalues_n
+  upvalues_n, i = read_varint(data, i)
+
+  for j = 1, upvalues_n do
+    local upvalue
+    upvalue, i = deserialize(data, cache, i)
+    debug.setupvalue(result, j, upvalue)
+  end
+
+  return result, i
 end
 
 deserializers[REF] = function(data, cache, i)

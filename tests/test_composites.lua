@@ -75,4 +75,11 @@ fw.test("table with metatable", function()
   fw.assert_equal(1, fw.pass(t)())
 end)
 
+fw.test("function with upvalues (closure)", function()
+  local a = 1
+  local b = 2
+  local f = function() return a + b end
+  fw.assert_pass(f)
+end)
+
 -- TODO benchmarking facility
