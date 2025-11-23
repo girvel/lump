@@ -106,6 +106,29 @@ local read_double = function(data, i)
   return sign * (1 + mantissa / 2^52) * 2^exponent, i + 8
 end
 
+--- @param result integer[]
+--- @param x string
+local write_string = function(result, x)
+  local len = #x
+  write_varint(result, len)
+  for i = 1, len do
+    table.insert(result, x:byte(i))
+  end
+end
+
+--- @param data string
+--- @param i integer
+--- @return string, integer
+local read_string = function(data, i)
+  local size
+  size, i = read_varint(data, i)
+
+  local result = data:sub(i, i + size - 1)
+  i = i + size
+
+  return result, i
+end
+
 -- TODO luajit has -0
 -- TODO reassign when ready
 local NIL = 0x00
@@ -125,6 +148,7 @@ local TABLE = 0x22
 local TABLE_WITH_METATABLE = 0x23
 local FUNCTION = 0x24
 local REF = 0x25
+local CODE = 0x26
 
 -- NOTICE must be bigger than 4, or it would collide with cache.size
 local BIG_STRING_THRESHOLD = 32
@@ -135,15 +159,37 @@ local BIG_STRING_THRESHOLD = 32
 --- @type table<string, fun(result: number[], cache: serialization_cache, x: any)>
 local serializers = {}
 
+local serialize
+
 --- @param result number[]
 --- @param cache serialization_cache
 --- @param x any
-local serialize = function(result, cache, x)
+serialize = function(result, cache, x)
   local cached_as = cache[x]
   if cached_as then
     table.insert(result, REF)
     write_varint(result, cached_as)
     return
+  end
+
+  do  -- handle override
+    local override = lump.serializer(x)
+    if override then
+      local override_type, source = type(override)
+
+      if override_type == "string" then
+        table.insert(result, CODE)
+        -- TODO caching
+        write_string(result, override)
+        return
+      end
+
+      -- TODO serialization stack
+      error(string.format(
+        "%s returned type %s; it should return string or function",
+        source or "lump.serializer", override_type
+      ))
+    end
   end
 
   local x_type = type(x)
@@ -194,9 +240,7 @@ serializers.number = function(result, cache, x)
 end
 
 serializers.string = function(result, cache, x)
-  local len = #x
-
-  if len < BIG_STRING_THRESHOLD then
+  if #x < BIG_STRING_THRESHOLD then
     table.insert(result, STRING)
   else
     table.insert(result, BIG_STRING)
@@ -205,10 +249,7 @@ serializers.string = function(result, cache, x)
     write_varint(result, cache.size)
   end
 
-  write_varint(result, len)
-  for i = 1, len do
-    table.insert(result, x:byte(i))
-  end
+  write_string(result, x)
 end
 
 serializers.table = function(result, cache, x)
@@ -242,13 +283,7 @@ serializers["function"] = function(result, cache, x)
   cache[x] = cache.size
   write_varint(result, cache.size)
 
-  local dump = string.dump(x)
-  local len = #dump
-  write_varint(result, len)
-
-  for i = 1, len do
-    table.insert(result, dump:byte(i))
-  end
+  write_string(result, string.dump(x))
 
   local upvalues_n = 0
   while debug.getupvalue(x, upvalues_n + 1) do
@@ -323,9 +358,7 @@ deserializers[VARINT_NEGATIVE] = function(data, _, i)
 end
 
 deserializers[STRING] = function(data, _, i)
-  local size
-  size, i = read_varint(data, i)
-  return data:sub(i, i + size - 1), i + size
+  return read_string(data, i)
 end
 
 deserializers[BIG_STRING] = function(data, cache, i)
@@ -374,11 +407,10 @@ deserializers[FUNCTION] = function(data, cache, i)
   local cache_id
   cache_id, i = read_varint(data, i)
 
-  local size
-  size, i = read_varint(data, i)
+  local dump
+  dump, i = read_string(data, i)
 
-  local result = assert(load(data:sub(i, i + size - 1)))
-  i = i + size
+  local result = assert(load(dump))
   cache[cache_id] = result
 
   local upvalues_n
@@ -413,6 +445,13 @@ deserializers[REF] = function(data, cache, i)
   return cache[id], i
 end
 
+deserializers[CODE] = function(data, _, i)
+  local code
+  code, i = read_string(data, i)
+  -- TODO handle parsing errors
+  return load("return " .. code)(), i
+end
+
 lump_mt.__call = function(_, value)
   return ("return require(%q).deserialize(%q)"):format(lump_modpath, lump.serialize(value))
 end
@@ -443,5 +482,10 @@ lump.deserialize = function(data)
   end
   return result
 end
+
+lump.serializer = setmetatable({}, {
+  __call = function(self, x)
+  end,
+})
 
 return lump
