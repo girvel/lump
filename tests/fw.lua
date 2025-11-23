@@ -60,6 +60,8 @@ fw.assert_pass = function(x)
   fw.assert_same(lump.deserialize(lump(x)), x)
 end
 
+local failed
+
 --- @param name string
 --- @param test fun()
 fw.test = function(name, test)
@@ -68,12 +70,14 @@ fw.test = function(name, test)
   if ok then
     print("+")
   else
+    failed = true
     print(("-\n  %s"):format(msg))
   end
 end
 
 --- @param tests string[]
 fw.run = function(tests)
+  failed = false
   for i, test in ipairs(tests) do
     print(("%s\n%s"):format(test, ("-"):rep(#test)))
     dofile(test)
@@ -81,6 +85,8 @@ fw.run = function(tests)
       print()
     end
   end
+
+  os.exit(failed and 1 or 0)
 end
 
 return fw

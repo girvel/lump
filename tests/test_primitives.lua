@@ -53,5 +53,3 @@ end)
 fw.test("pass: function", function()
   fw.assert_pass(function() return 35 + 34 end)
 end)
-
--- TODO os.exit
