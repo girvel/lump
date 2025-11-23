@@ -1,5 +1,7 @@
 --- @diagnostic disable:inject-field
 
+local lump_modpath = ...
+
 local load
 if _VERSION == "Lua 5.1" then
   load = loadstring
@@ -9,6 +11,7 @@ end
 local unpack = unpack or table.unpack
 
 local lump_mt = {}
+--- @overload fun(x: any): string
 local lump = setmetatable({}, lump_mt)
 
 --- @param result integer[]
@@ -317,8 +320,13 @@ deserializers[REF] = function(data, cache, i)
   return cache[id], i
 end
 
--- TODO __call returns load-able string, .serialize does this
 lump_mt.__call = function(_, value)
+  return ("return require(%q).deserialize(%q)"):format(lump_modpath, lump.serialize(value))
+end
+
+--- @param value any
+--- @return string
+lump.serialize = function(value)
   local result = {string.byte("LUMP", 1, 4)}
   serialize(result, {size = 0}, value)
 

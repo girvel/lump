@@ -27,7 +27,7 @@ fw.test("pass: multiple string references", function()
   end
 
   local t = {a = str, b = str}
-  local dump = lump(t)
+  local dump = lump.serialize(t)
 
   assert(#dump < SIZE * 2)
   local copy = lump.deserialize(dump)

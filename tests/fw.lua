@@ -51,13 +51,13 @@ end
 --- @return T
 fw.pass = function(x)
   local lump = require("init")
-  return lump.deserialize(lump(x))
+  return lump.deserialize(lump.serialize(x))
 end
 
 --- @param x any
 fw.assert_pass = function(x)
   local lump = require("init")
-  fw.assert_same(lump.deserialize(lump(x)), x)
+  fw.assert_same(lump.deserialize(lump.serialize(x)), x)
 end
 
 local failed
