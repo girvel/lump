@@ -148,7 +148,8 @@ local TABLE = 0x22
 local TABLE_WITH_METATABLE = 0x23
 local FUNCTION = 0x24
 local REF = 0x25
-local CODE = 0x26
+local CODE_STRING = 0x26
+local CODE = 0x27
 
 -- NOTICE must be bigger than 4, or it would collide with cache.size
 local BIG_STRING_THRESHOLD = 32
@@ -178,13 +179,19 @@ serialize = function(result, cache, x)
       local override_type, source = type(override)
 
       if override_type == "string" then
-        table.insert(result, CODE)
+        table.insert(result, CODE_STRING)
         -- TODO caching
         write_string(result, override)
         return
       end
 
-      -- TODO serialization stack
+      if override_type == "function" then
+        table.insert(result, CODE)
+        serialize(result, cache, override)
+        return
+      end
+
+      -- TODO serialization key stack
       error(string.format(
         "%s returned type %s; it should return string or function",
         source or "lump.serializer", override_type
@@ -445,11 +452,17 @@ deserializers[REF] = function(data, cache, i)
   return cache[id], i
 end
 
-deserializers[CODE] = function(data, _, i)
+deserializers[CODE_STRING] = function(data, _, i)
   local code
   code, i = read_string(data, i)
   -- TODO handle parsing errors
   return load("return " .. code)(), i
+end
+
+deserializers[CODE] = function(data, cache, i)
+  local code
+  code, i = deserialize(data, cache, i)
+  return code(), i
 end
 
 lump_mt.__call = function(_, value)
