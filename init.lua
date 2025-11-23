@@ -146,7 +146,7 @@ end
 
 serializers.string = function(result, x)
   table.insert(result, STRING)
-  write_double(result, #x)
+  write_varint(result, #x)
   for char in x:gmatch(".") do
     table.insert(result, string.byte(char))
   end
@@ -198,7 +198,7 @@ end
 
 deserializers[STRING] = function(data, i)
   local size
-  size, i = read_double(data, i)
+  size, i = read_varint(data, i)
   return data:sub(i, i + size - 1), i + size
 end
 
