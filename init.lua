@@ -37,28 +37,59 @@ local write_double = function(result, x)
   table.insert(result, sign * 2^7 + exponent_high_bits)
 end
 
-local handlers = {}
+--- @param data string
+--- @param i integer
+--- @return number, integer
+local read_double = function(data, i)
+  local b6 = data:byte(i + 6)
+  local b7 = data:byte(i + 7)
+  local mantissa = data:byte(i)
+    + data:byte(i + 1) * 2^8
+    + data:byte(i + 2) * 2^16
+    + data:byte(i + 3) * 2^24
+    + data:byte(i + 4) * 2^32
+    + data:byte(i + 5) * 2^40
+    + (b6 % 2^4) * 2^48
+
+  local exponent = (math.floor(b6 / 2^4) + (b7 % 2^7) * 2^4) - 1023
+  local sign = b7 >= 128 and -1 or 1
+  return sign * (1 + mantissa / 2^52) * 2^exponent, i + 8
+end
+
+local NUMBER = 0x12
+local STRING = 0x20
+
+local serializers = {}
 
 --- @param result number[]
 --- @param x number
-handlers.number = function(result, x)
-  table.insert(result, 0x12)
+serializers.number = function(result, x)
+  table.insert(result, NUMBER)
   write_double(result, x)
 end
 
 --- @param result number[]
 --- @param x string
-handlers.string = function(result, x)
-  table.insert(result, 0x20)
+serializers.string = function(result, x)
+  table.insert(result, STRING)
   write_double(result, #x)
   for char in x:gmatch(".") do
     table.insert(result, string.byte(char))
   end
 end
 
+local deserializers = {}
+
+--- @param data string
+--- @param i integer
+--- @return number, integer
+deserializers[NUMBER] = function(data, i)
+  return read_double(data, i)
+end
+
 lump_mt.__call = function(_, value)
   local result = {string.byte("LUMP", 1, 4)}
-  handlers[type(value)](result, value)
+  serializers[type(value)](result, value)
 
   local str = ""
   for _, e in ipairs(result) do
@@ -67,29 +98,17 @@ lump_mt.__call = function(_, value)
   return str
 end
 
-local to_hex = function(str)
-  local result, _ = str:gsub(".", function(char)
-    return string.format("%02X ", string.byte(char))
-  end)
+--- @param data string
+lump.deserialize = function(data)
+  local magic = data:sub(1, 4)
+  if magic ~= "LUMP" then
+    error(('Expected data to start with "LUMP", got %q instead'):format(magic))
+  end
+
+  local type_id = data:byte(5)  -- TODO check
+  local result, end_i = deserializers[type_id](data, 6)
+  assert(end_i == #data + 1)
   return result
 end
-
-local to_bin = function(str)
-  local result, _ = str:gsub(".", function(x)
-    x = string.byte(x)
-    local s = ""
-    for _ = 1, 8 do
-      s = (x % 2) .. s
-      x = math.floor(x / 2)
-    end
-    return s .. " "
-  end)
-  return result
-end
-
-print(to_bin(lump(1.0)))
-print(to_bin(lump(-2.0)))
-print(to_bin(lump("Hello, world!")))
-print(("%q"):format(lump("Hello, world!")))
 
 return lump
