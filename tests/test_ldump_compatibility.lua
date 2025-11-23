@@ -2,6 +2,8 @@ local fw = require("tests.fw")
 local lump = require("init")
 
 
+local load = loadstring or load
+
 fw.test("ensure lump(x) is loadable", function()
   local value = {a = 1, b = 2, hello = "world"}
   local dump = lump(value)

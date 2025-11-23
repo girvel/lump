@@ -2,12 +2,7 @@
 
 local lump_modpath = ...
 
-local load
-if _VERSION == "Lua 5.1" then
-  load = loadstring
-else
-  load = _G.load
-end
+local load = loadstring or load
 local unpack = unpack or table.unpack
 
 local lump_mt = {}
