@@ -113,13 +113,15 @@ local read_double = function(data, i)
   return sign * (1 + mantissa / 2^52) * 2^exponent, i + 8
 end
 
+-- TODO luajit has -0
 -- TODO reassign when ready
 local NIL = 0x00
 local FALSE = 0x01
 local TRUE = 0x02
 local ZERO = 0x03
 local ONE = 0x04
-local VARINT = 0x11
+local VARINT = 0x10
+local VARINT_NEGATIVE = 0x11
 local NUMBER = 0x12
 local STRING = 0x20
 local BIG_STRING = 0x21
@@ -170,9 +172,14 @@ serializers.number = function(result, cache, x)
   elseif x == 1 then
     table.insert(result, ONE)
     return
-  elseif x > 0 and x % 1 == 0 then
-    table.insert(result, VARINT)
-    write_varint(result, x)
+  elseif x % 1 == 0 then
+    if x > 0 then
+      table.insert(result, VARINT)
+      write_varint(result, x)
+    else
+      table.insert(result, VARINT_NEGATIVE)
+      write_varint(result, -x)
+    end
     return
   end
 
@@ -263,6 +270,12 @@ end
 
 deserializers[VARINT] = function(data, _, i)
   return read_varint(data, i)
+end
+
+deserializers[VARINT_NEGATIVE] = function(data, _, i)
+  local result
+  result, i = read_varint(data, i)
+  return -result, i
 end
 
 deserializers[STRING] = function(data, _, i)

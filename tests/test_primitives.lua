@@ -23,7 +23,15 @@ fw.test("pass: zero/one", function()
 end)
 
 fw.test("pass: varint", function()
-  fw.assert_pass(123)
+  local dump = lump.serialize(123)
+  assert(#dump < 12, "Serializing varint as double")
+  assert(lump.deserialize(dump) == 123)
+end)
+
+fw.test("pass: negative varint", function()
+  local dump = lump.serialize(-123)
+  assert(#dump < 12, "Serializing negative varint as double")
+  assert(lump.deserialize(dump) == -123)
 end)
 
 fw.test("pass: double", function()
