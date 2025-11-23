@@ -154,16 +154,16 @@ end
 
 serializers.table = function(result, x)
   table.insert(result, TABLE)
-  local size_i = #result + 1
-  for _ = 1, 8 do
-    table.insert(result, 0)
+  local size = 0
+  for _ in pairs(x) do
+    size = size + 1
   end
+  write_varint(result, size)
 
   for k, v in pairs(x) do
     serialize(result, k)
     serialize(result, v)
   end
-  write_double(result, #result - size_i - 7, size_i)
 end
 
 --- @type table<integer, fun(data: string, i: integer): any, integer>
@@ -173,7 +173,7 @@ local deserializers = {}
 --- @param i integer
 --- @return any, integer
 local deserialize = function(data, i)
-  local type_id = data:byte(i)  -- TODO check
+  local type_id = data:byte(i)
   local deserializer = deserializers[type_id]
   if not deserializer then
     error(("Unknown type ID 0x%02X"):format(type_id))
@@ -204,23 +204,14 @@ end
 
 deserializers[TABLE] = function(data, i)
   local size
-  size, i = read_double(data, i)
-  local start = i
-  local end_i = i + size
+  size, i = read_varint(data, i)
 
   local result = {}
-  while i < end_i do
+  for _ = 1, size do
     local k, v
     k, i = deserialize(data, i)
     v, i = deserialize(data, i)
     result[k] = v
-  end
-
-  if i ~= end_i then
-    error(string.format(
-      "Table size does not match its contents; ended on byte %i, expected %i (size %i, start %i)",
-      i, end_i, size, start
-    ))
   end
 
   return result, i
