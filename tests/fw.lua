@@ -73,7 +73,7 @@ fw.assert_pass = function(x)
   fw.assert_same(lump.deserialize(lump.serialize(x)), x)
 end
 
-local failed
+local passed, total
 
 --- @param name string
 --- @param test fun()
@@ -81,16 +81,19 @@ fw.test = function(name, test)
   io.stdout:write(name .. " ")
   local ok, msg = xpcall(test, debug.traceback)
   if ok then
+    passed = passed + 1
     print("+")
   else
-    failed = true
     print(("-\n  %s"):format(msg))
   end
+  total = total + 1
 end
 
 --- @param tests string[]
 fw.run = function(tests)
-  failed = false
+  passed = 0
+  total = 0
+
   for i, test in ipairs(tests) do
     print(("%s\n%s"):format(test, ("-"):rep(#test)))
     dofile(test)
@@ -99,7 +102,8 @@ fw.run = function(tests)
     end
   end
 
-  os.exit(failed and 1 or 0)
+  print(("\n[Passed: %s/%s]"):format(total, passed))
+  os.exit(passed == total and 0 or 1)
 end
 
 return fw
