@@ -120,6 +120,9 @@ local FALSE = 0x01
 local TRUE = 0x02
 local ZERO = 0x03
 local ONE = 0x04
+local INFINITY = 0x05
+local NEGATIVE_INFINITY = 0x06
+local NAN = 0x07
 local VARINT = 0x10
 local VARINT_NEGATIVE = 0x11
 local NUMBER = 0x12
@@ -171,6 +174,15 @@ serializers.number = function(result, cache, x)
     return
   elseif x == 1 then
     table.insert(result, ONE)
+    return
+  elseif x == math.huge then
+    table.insert(result, INFINITY)
+    return
+  elseif x == -math.huge then
+    table.insert(result, NEGATIVE_INFINITY)
+    return
+  elseif x ~= x then
+    table.insert(result, NAN)
     return
   elseif x % 1 == 0 then
     if x > 0 then
@@ -259,10 +271,13 @@ local deserialize = function(data, cache, i)
 end
 
 deserializers[NIL] = function(_, _, i) return nil, i end
-deserializers[ZERO] = function(_, _, i) return 0, i end
-deserializers[ONE] = function(_, _, i) return 1, i end
 deserializers[TRUE] = function(_, _, i) return true, i end
 deserializers[FALSE] = function(_, _, i) return false, i end
+deserializers[ZERO] = function(_, _, i) return 0, i end
+deserializers[ONE] = function(_, _, i) return 1, i end
+deserializers[INFINITY] = function(_, _, i) return math.huge, i end
+deserializers[NEGATIVE_INFINITY] = function(_, _, i) return -math.huge, i end
+deserializers[NAN] = function(_, _, i) return 0/0, i end
 
 deserializers[NUMBER] = function(data, _, i)
   return read_double(data, i)
