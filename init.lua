@@ -150,7 +150,6 @@ local FUNCTION = 0x24
 local REF = 0x25
 local CODE_STRING = 0x26
 local CODE = 0x27
-local CODE_REF = 0x28
 
 -- NOTICE must be bigger than 4, or it would collide with cache.size
 local BIG_STRING_THRESHOLD = 32
@@ -181,7 +180,9 @@ serialize = function(result, cache, x)
 
       if override_type == "string" then
         table.insert(result, CODE_STRING)
-        -- TODO caching
+        cache.size = cache.size + 1
+        cache[x] = cache.size
+        write_varint(result, cache.size)
         write_string(result, override)
         return
       end
@@ -456,11 +457,18 @@ deserializers[REF] = function(data, cache, i)
   return cache[id], i
 end
 
-deserializers[CODE_STRING] = function(data, _, i)
+deserializers[CODE_STRING] = function(data, cache, i)
+  local cache_id
+  cache_id, i = read_varint(data, i)
+
   local code
   code, i = read_string(data, i)
+
   -- TODO handle parsing errors
-  return load("return " .. code)(), i
+  local result = load("return " .. code)()
+  cache[cache_id] = result
+
+  return result, i
 end
 
 deserializers[CODE] = function(data, cache, i)

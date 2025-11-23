@@ -69,10 +69,21 @@ fw.test("lump.serializer.handlers: threads", function()
   lump.serializer.handlers[thread] = nil
 end)
 
-fw.test("lump.serializer.handlers: caching", function()
+fw.test("lump.serializer.handlers: caching (function)", function()
   local f = coroutine.wrap(function() end)
   local to_serialize = {a = f, b = f}
   lump.serializer.handlers[f] = function() return {} end
+
+  local copy = fw.pass(to_serialize)
+  fw.assert_equal(copy.a, copy.b)
+
+  lump.serializer.handlers[f] = nil
+end)
+
+fw.test("lump.serializer.handlers: caching (string)", function()
+  local f = coroutine.wrap(function() end)
+  local to_serialize = {a = f, b = f}
+  lump.serializer.handlers[f] = [[{}]]
 
   local copy = fw.pass(to_serialize)
   fw.assert_equal(copy.a, copy.b)
