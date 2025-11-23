@@ -150,6 +150,7 @@ local FUNCTION = 0x24
 local REF = 0x25
 local CODE_STRING = 0x26
 local CODE = 0x27
+local ENV = 0x28
 
 -- NOTICE must be bigger than 4, or it would collide with cache.size
 local BIG_STRING_THRESHOLD = 32
@@ -306,7 +307,7 @@ serializers["function"] = function(result, cache, x)
   write_varint(result, upvalues_n)
 
   for i = 1, upvalues_n do
-    local _, v = debug.getupvalue(x, i)
+    local k, v = debug.getupvalue(x, i)
 
     local id
     if debug.upvalueid then
@@ -322,9 +323,11 @@ serializers["function"] = function(result, cache, x)
     end
     write_varint(result, id)
 
-    serialize(result, cache, v)
-    -- TODO handle _ENV
-    -- TODO handle joined upvalues
+    if k == "_ENV" and _ENV ~= nil and v._G == _G then
+      table.insert(result, ENV)
+    else
+      serialize(result, cache, v)
+    end
   end
 end
 
@@ -485,6 +488,10 @@ deserializers[CODE] = function(data, cache, i)
   return result, i
 end
 
+deserializers[ENV] = function(data, cache, i)
+  return _ENV or _G, i
+end
+
 lump_mt.__call = function(_, value)
   return ("return require(%q).deserialize(%q)"):format(lump.require_path, lump.serialize(value))
 end
@@ -517,7 +524,7 @@ lump.deserialize = function(data)
 end
 
 lump.serializer = setmetatable({
-  handlers = {},
+  handlers = setmetatable({}, {__mode = "k"}),
 }, {
   __call = function(self, x)
     local handler = self.handlers[x]
