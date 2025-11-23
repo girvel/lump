@@ -124,6 +124,7 @@ local NUMBER = 0x12
 local STRING = 0x20
 local BIG_STRING = 0x21
 local TABLE = 0x22
+local TABLE_WITH_METATABLE = 0x23
 local FUNCTION = 0x24
 local REF = 0x25
 
@@ -213,7 +214,9 @@ serializers.string = function(result, cache, x)
 end
 
 serializers.table = function(result, cache, x)
-  table.insert(result, TABLE)
+  local mt = getmetatable(x)
+
+  table.insert(result, mt and TABLE_WITH_METATABLE or TABLE)
   cache.size = cache.size + 1
   cache[x] = cache.size
   write_varint(result, cache.size)
@@ -227,6 +230,10 @@ serializers.table = function(result, cache, x)
   for k, v in pairs(x) do
     serialize(result, cache, k)
     serialize(result, cache, v)
+  end
+
+  if mt then
+    serialize(result, cache, mt)
   end
 end
 
@@ -324,6 +331,16 @@ deserializers[TABLE] = function(data, cache, i)
   end
 
   return result, i
+end
+
+deserializers[TABLE_WITH_METATABLE] = function(data, cache, i)
+  local result
+  result, i = deserializers[TABLE](data, cache, i)
+
+  local mt
+  mt, i = deserialize(data, cache, i)
+
+  return setmetatable(result, mt), i
 end
 
 deserializers[FUNCTION] = function(data, cache, i)

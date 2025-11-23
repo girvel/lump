@@ -70,4 +70,9 @@ fw.test("tables as keys", function()
   fw.assert_equal(result[result], result)
 end)
 
+fw.test("table with metatable", function()
+  local t = setmetatable({value = 1}, {__call = function(self) return self.value end})
+  fw.assert_equal(1, fw.pass(t)())
+end)
+
 -- TODO benchmarking facility
