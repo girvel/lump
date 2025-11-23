@@ -119,11 +119,13 @@ local ONE = 0x04
 local VARINT = 0x11
 local NUMBER = 0x12
 local STRING = 0x20
+local BIG_STRING = 0x21
 local TABLE = 0x22
 local FUNCTION = 0x24
 local REF = 0x25
 
--- TODO caching strings => collision with .size
+-- NOTICE must be bigger than 4, or it would collide with cache.size
+local BIG_STRING_THRESHOLD = 32
 
 --- @class serialization_cache: table<any, integer>
 --- @field size integer
@@ -176,8 +178,17 @@ serializers.number = function(result, cache, x)
 end
 
 serializers.string = function(result, cache, x)
-  table.insert(result, STRING)
   local len = #x
+
+  if len < BIG_STRING_THRESHOLD then
+    table.insert(result, STRING)
+  else
+    table.insert(result, BIG_STRING)
+    cache.size = cache.size + 1
+    cache[x] = cache.size
+    write_varint(result, cache.size)
+  end
+
   write_varint(result, len)
   for i = 1, len do
     table.insert(result, x:byte(i))
@@ -255,6 +266,18 @@ deserializers[STRING] = function(data, _, i)
   local size
   size, i = read_varint(data, i)
   return data:sub(i, i + size - 1), i + size
+end
+
+deserializers[BIG_STRING] = function(data, cache, i)
+  local cache_id
+  cache_id, i = read_varint(data, i)
+
+  local size
+  size, i = read_varint(data, i)
+
+  local result = data:sub(i, i + size - 1)
+  cache[cache_id] = result
+  return result, i + size
 end
 
 deserializers[TABLE] = function(data, cache, i)

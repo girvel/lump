@@ -1,4 +1,5 @@
 local fw = require("tests.fw")
+local lump = require("init")
 
 fw.test("pass: multiple table references", function()
   local ref = {value = 1}
@@ -18,6 +19,23 @@ fw.test("pass: multiple function references", function()
   assert(copy.a == copy.b)
 end)
 
--- TODO multiple string references
--- TODO "size" string
+fw.test("pass: multiple string references", function()
+  local SIZE = 1024
+  local str = ""
+  for _ = 1, SIZE do
+    str = str .. "A"
+  end
+
+  local t = {a = str, b = str}
+  local dump = lump(t)
+
+  assert(#dump < SIZE * 2)
+  local copy = lump.deserialize(dump)
+  fw.assert_same(t, copy)
+end)
+
+fw.test("check collision with cache.size", function()
+  fw.pass({a = "size", b = "size"})
+end)
+
 -- TODO i8

@@ -75,10 +75,9 @@ end
 --- @param tests string[]
 fw.run = function(tests)
   for i, test in ipairs(tests) do
-    local name = test
-    print(("%s\n%s"):format(name, ("-"):rep(#name)))
+    print(("%s\n%s"):format(test, ("-"):rep(#test)))
     dofile(test)
-    if i > 1 then
+    if i < #tests then
       print()
     end
   end
