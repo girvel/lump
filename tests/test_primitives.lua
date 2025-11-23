@@ -53,9 +53,8 @@ fw.test("pass: empty string", function()
   fw.assert_pass("")
 end)
 
-fw.test("pass: table", function()
-  fw.assert_pass({a = 1})
-  fw.assert_pass({"Hello, world!"})
+fw.test("pass: empty table", function()
+  fw.assert_pass({})
 end)
 
 fw.test("pass: function", function()

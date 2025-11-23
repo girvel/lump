@@ -1,6 +1,11 @@
 local fw = require("tests.fw")
 local lump = require("init")
 
+fw.test("pass: table", function()
+  fw.assert_pass({a = 1})
+  fw.assert_pass({"Hello, world!"})
+end)
+
 fw.test("pass: multiple table references", function()
   local ref = {value = 1}
   local t = {a = ref, b = ref}
@@ -39,6 +44,7 @@ fw.test("check collision with cache.size", function()
 end)
 
 -- TODO function circular references?
+-- TODO function references to itself
 fw.test("pass: table circular references", function()
   local t = {a = {}, b = {}}
   t.a.b = t.b
@@ -48,3 +54,20 @@ fw.test("pass: table circular references", function()
   fw.assert_equal(result.a.b, result.b)
   fw.assert_equal(result.b.a, result.a)
 end)
+
+fw.test("pass: table references to itself", function()
+  local t = {}
+  t.t = t
+  local result = fw.pass(t)
+  fw.assert_same(t, result)
+  fw.assert_equal(result, result.t)
+end)
+
+fw.test("tables as keys", function()
+  local t = {}
+  t[t] = t
+  local result = fw.pass(t)
+  fw.assert_equal(result[result], result)
+end)
+
+-- TODO benchmarking facility
