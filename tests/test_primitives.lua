@@ -29,3 +29,10 @@ fw.test("pass: zero/one", function()
   pass(1)
   pass(0)
 end)
+
+fw.test("pass: nil", function() pass(nil) end)
+
+fw.test("pass: boolean", function()
+  pass(true)
+  pass(false)
+end)

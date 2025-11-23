@@ -1,3 +1,5 @@
+--- @diagnostic disable:inject-field
+
 local lump_mt = {}
 local lump = setmetatable({}, lump_mt)
 
@@ -65,12 +67,17 @@ local NUMBER = 0x12
 local STRING = 0x20
 local TABLE = 0x22
 
+--- @type table<integer, fun(result: number[], x: any)>
 local serializers = {}
 
--- serializers["nil"] = 
+serializers["nil"] = function(result, x)
+  table.insert(result, NIL)
+end
 
---- @param result number[]
---- @param x number
+serializers.boolean = function(result, x)
+  table.insert(result, x and TRUE or FALSE)
+end
+
 serializers.number = function(result, x)
   if x == 0 then
     table.insert(result, ZERO)
@@ -97,12 +104,15 @@ end
 --- @type table<integer, fun(data: string, i: integer): any, integer>
 local deserializers = {}
 
+deserializers[NIL] = function(_, i) return nil, i end
+deserializers[ZERO] = function(_, i) return 0, i end
+deserializers[ONE] = function(_, i) return 1, i end
+deserializers[TRUE] = function(_, i) return true, i end
+deserializers[FALSE] = function(_, i) return false, i end
+
 deserializers[NUMBER] = function(data, i)
   return read_double(data, i)
 end
-
-deserializers[ZERO] = function(_, i) return 0, i end
-deserializers[ONE] = function(_, i) return 1, i end
 
 lump_mt.__call = function(_, value)
   local result = {string.byte("LUMP", 1, 4)}
