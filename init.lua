@@ -114,6 +114,12 @@ deserializers[NUMBER] = function(data, i)
   return read_double(data, i)
 end
 
+deserializers[STRING] = function(data, i)
+  local size
+  size, i = read_double(data, i)
+  return data:sub(i, i + size - 1), i + size
+end
+
 lump_mt.__call = function(_, value)
   local result = {string.byte("LUMP", 1, 4)}
   serializers[type(value)](result, value)

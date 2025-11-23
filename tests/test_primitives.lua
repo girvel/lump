@@ -36,3 +36,7 @@ fw.test("pass: boolean", function()
   pass(true)
   pass(false)
 end)
+
+fw.test("pass: string", function()
+  pass("Hello, world!")
+end)
