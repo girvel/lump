@@ -121,30 +121,44 @@ local NUMBER = 0x12
 local STRING = 0x20
 local TABLE = 0x22
 local FUNCTION = 0x24
+local REF = 0x25
 
---- @type table<string, fun(result: number[], x: any)>
+-- TODO caching strings => collision with .size
+
+--- @class serialization_cache: table<any, integer>
+--- @field size integer
+
+--- @type table<string, fun(result: number[], cache: serialization_cache, x: any)>
 local serializers = {}
 
 --- @param result number[]
+--- @param cache serialization_cache
 --- @param x any
-local serialize = function(result, x)
+local serialize = function(result, cache, x)
+  local cached_as = cache[x]
+  if cached_as then
+    table.insert(result, REF)
+    write_varint(result, cached_as)
+    return
+  end
+
   local x_type = type(x)
   local serializer = serializers[x_type]
   if not serializer then
     error(("Impossible to serialize %s"):format(x_type))
   end
-  serializer(result, x)
+  serializer(result, cache, x)
 end
 
-serializers["nil"] = function(result, x)
+serializers["nil"] = function(result, cache, x)
   table.insert(result, NIL)
 end
 
-serializers.boolean = function(result, x)
+serializers.boolean = function(result, cache, x)
   table.insert(result, x and TRUE or FALSE)
 end
 
-serializers.number = function(result, x)
+serializers.number = function(result, cache, x)
   if x == 0 then
     table.insert(result, ZERO)
     return
@@ -161,7 +175,7 @@ serializers.number = function(result, x)
   write_double(result, x)
 end
 
-serializers.string = function(result, x)
+serializers.string = function(result, cache, x)
   table.insert(result, STRING)
   local len = #x
   write_varint(result, len)
@@ -170,8 +184,12 @@ serializers.string = function(result, x)
   end
 end
 
-serializers.table = function(result, x)
+serializers.table = function(result, cache, x)
   table.insert(result, TABLE)
+  cache.size = cache.size + 1
+  cache[x] = cache.size
+  write_varint(result, cache.size)
+
   local size = 0
   for _ in pairs(x) do
     size = size + 1
@@ -179,12 +197,12 @@ serializers.table = function(result, x)
   write_varint(result, size)
 
   for k, v in pairs(x) do
-    serialize(result, k)
-    serialize(result, v)
+    serialize(result, cache, k)
+    serialize(result, cache, v)
   end
 end
 
-serializers["function"] = function(result, x)
+serializers["function"] = function(result, cache, x)
   table.insert(result, FUNCTION)
   local dump = string.dump(x)
   local len = #dump
@@ -194,66 +212,79 @@ serializers["function"] = function(result, x)
   end
 end
 
---- @type table<integer, fun(data: string, i: integer): any, integer>
+--- @alias deserialization_cache table<integer, any>
+
+--- @type table<integer, fun(data: string, cache: deserialization_cache, i: integer): any, integer>
 local deserializers = {}
 
 --- @param data string
+--- @param cache deserialization_cache
 --- @param i integer
 --- @return any, integer
-local deserialize = function(data, i)
+local deserialize = function(data, cache, i)
   local type_id = data:byte(i)
   local deserializer = deserializers[type_id]
   if not deserializer then
     error(("Unknown type ID 0x%02X"):format(type_id))
   end
 
-  return deserializer(data, i + 1)
+  return deserializer(data, cache, i + 1)
 end
 
-deserializers[NIL] = function(_, i) return nil, i end
-deserializers[ZERO] = function(_, i) return 0, i end
-deserializers[ONE] = function(_, i) return 1, i end
-deserializers[TRUE] = function(_, i) return true, i end
-deserializers[FALSE] = function(_, i) return false, i end
+deserializers[NIL] = function(_, _, i) return nil, i end
+deserializers[ZERO] = function(_, _, i) return 0, i end
+deserializers[ONE] = function(_, _, i) return 1, i end
+deserializers[TRUE] = function(_, _, i) return true, i end
+deserializers[FALSE] = function(_, _, i) return false, i end
 
-deserializers[NUMBER] = function(data, i)
+deserializers[NUMBER] = function(data, _, i)
   return read_double(data, i)
 end
 
-deserializers[VARINT] = function(data, i)
+deserializers[VARINT] = function(data, _, i)
   return read_varint(data, i)
 end
 
-deserializers[STRING] = function(data, i)
+deserializers[STRING] = function(data, _, i)
   local size
   size, i = read_varint(data, i)
   return data:sub(i, i + size - 1), i + size
 end
 
-deserializers[TABLE] = function(data, i)
+deserializers[TABLE] = function(data, cache, i)
+  local cache_id
+  cache_id, i = read_varint(data, i)
+
   local size
   size, i = read_varint(data, i)
 
   local result = {}
   for _ = 1, size do
     local k, v
-    k, i = deserialize(data, i)
-    v, i = deserialize(data, i)
+    k, i = deserialize(data, cache, i)
+    v, i = deserialize(data, cache, i)
     result[k] = v
   end
 
+  cache[cache_id] = result
   return result, i
 end
 
-deserializers[FUNCTION] = function(data, i)
+deserializers[FUNCTION] = function(data, _, i)
   local size
   size, i = read_varint(data, i)
   return load(data:sub(i, i + size - 1)), i + size
 end
 
+deserializers[REF] = function(data, cache, i)
+  local id
+  id, i = read_varint(data, i)
+  return cache[id], i
+end
+
 lump_mt.__call = function(_, value)
   local result = {string.byte("LUMP", 1, 4)}
-  serialize(result, value)
+  serialize(result, {size = 0}, value)
 
   local str = ""
   for _, e in ipairs(result) do
@@ -269,7 +300,7 @@ lump.deserialize = function(data)
     error(('Expected data to start with "LUMP", got %q instead'):format(magic))
   end
 
-  local result, end_i = deserialize(data, 5)
+  local result, end_i = deserialize(data, {}, 5)
   if end_i ~= #data + 1 then
     error(("Read %s bytes, got %s total"):format(end_i - 1, #data))
   end

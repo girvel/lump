@@ -18,40 +18,40 @@ fw.test("serialization: string", function()
 end)
 
 fw.test("pass: zero/one", function()
-  fw.pass(1)
-  fw.pass(0)
+  fw.assert_pass(1)
+  fw.assert_pass(0)
 end)
 
 fw.test("pass: varint", function()
-  fw.pass(123)
+  fw.assert_pass(123)
 end)
 
 fw.test("pass: double", function()
-  fw.pass(12.3)
+  fw.assert_pass(12.3)
 end)
 
-fw.test("pass: nil", function() fw.pass(nil) end)
+fw.test("pass: nil", function() fw.assert_pass(nil) end)
 
 fw.test("pass: boolean", function()
-  fw.pass(true)
-  fw.pass(false)
+  fw.assert_pass(true)
+  fw.assert_pass(false)
 end)
 
 fw.test("pass: string", function()
-  fw.pass("Hello, world!")
+  fw.assert_pass("Hello, world!")
 end)
 
 fw.test("pass: empty string", function()
-  fw.pass("")
+  fw.assert_pass("")
 end)
 
 fw.test("pass: table", function()
-  fw.pass({a = 1})
-  fw.pass({"Hello, world!"})
+  fw.assert_pass({a = 1})
+  fw.assert_pass({"Hello, world!"})
 end)
 
 fw.test("pass: function", function()
-  fw.pass(function() return 35 + 34 end)
+  fw.assert_pass(function() return 35 + 34 end)
 end)
 
 -- TODO os.exit
