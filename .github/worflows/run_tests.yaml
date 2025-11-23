@@ -1,0 +1,48 @@
+name: Run tests
+on: [push]
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        luaVersion: ["5.4", "5.3", "5.2", "5.1", "luajit"]
+
+    # would not test on windows, the leafo-gh-actions-lua bugs out even with presetup
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Setup Lua
+      if: matrix.luaVersion != 'luajit'
+      uses: leafo/gh-actions-lua@v10
+      with:
+        luaVersion: ${{ matrix.luaVersion }}
+        buildCache: false
+
+    - name: Setup LuaJIT
+      if: matrix.luaVersion == 'luajit'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential
+
+        git clone https://luajit.org/git/luajit.git
+        cd luajit
+        make -j
+        sudo make install
+        sudo ln -sf /usr/local/bin/luajit /usr/local/bin/lua
+        cd ..
+
+        wget https://luarocks.org/releases/luarocks-3.9.2.tar.gz
+        tar zxpf luarocks-3.9.2.tar.gz
+        cd luarocks-3.9.2
+        ./configure --with-lua=/usr/local
+        make
+        sudo make install
+
+        sudo ldconfig
+
+    - name: Run tests
+      run: lua tests/init.lua
+
