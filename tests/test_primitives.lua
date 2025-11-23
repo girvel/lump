@@ -49,3 +49,9 @@ fw.test("pass: table", function()
   fw.pass({a = 1})
   fw.pass({"Hello, world!"})
 end)
+
+fw.test("pass: function", function()
+  fw.pass(function() return 35 + 34 end)
+end)
+
+-- TODO os.exit

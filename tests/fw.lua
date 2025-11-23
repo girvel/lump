@@ -26,23 +26,26 @@ end
 
 local assert_same
 assert_same = function(x, expected)
+  if type(x) ~= "table" then
+    assert(x == expected)
+    return
+  end
+
   for k, v in pairs(expected) do
     assert(type(k) ~= "table")
-    if type(v) == "table" then
-      assert_same(x[k], v)
-    else
-      assert(x[k] == v)
-    end
+    assert_same(x[k], v)
   end
 end
 
 --- @param x any
-fw.pass = function(x)
+fw.pass = function(x, ...)
   local lump = require("init")
   local dump = lump(x)
   local copy = lump.deserialize(dump)
   if type(x) == "table" then
     assert_same(copy, x)
+  elseif type(x) == "function" then
+    assert_same(copy(...), x(...))
   else
     if copy ~= x then
       error(("Expected %s to stay the same, got %s instead\n%s"):format(x, copy, fw.to_hex(dump)))

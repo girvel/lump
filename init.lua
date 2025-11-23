@@ -1,5 +1,13 @@
 --- @diagnostic disable:inject-field
 
+local load
+if _VERSION == "Lua 5.1" then
+  load = loadstring
+else
+  load = load
+end
+local unpack = unpack or table.unpack
+
 local lump_mt = {}
 local lump = setmetatable({}, lump_mt)
 
@@ -100,6 +108,7 @@ local read_double = function(data, i)
   return sign * (1 + mantissa / 2^52) * 2^exponent, i + 8
 end
 
+-- TODO reassign when ready
 local NIL = 0x00
 local FALSE = 0x01
 local TRUE = 0x02
@@ -109,6 +118,7 @@ local VARINT = 0x11
 local NUMBER = 0x12
 local STRING = 0x20
 local TABLE = 0x22
+local FUNCTION = 0x24
 
 --- @type table<string, fun(result: number[], x: any)>
 local serializers = {}
@@ -116,7 +126,12 @@ local serializers = {}
 --- @param result number[]
 --- @param x any
 local serialize = function(result, x)
-  serializers[type(x)](result, x)
+  local x_type = type(x)
+  local serializer = serializers[x_type]
+  if not serializer then
+    error(("Impossible to serialize %s"):format(x_type))
+  end
+  serializer(result, x)
 end
 
 serializers["nil"] = function(result, x)
@@ -163,6 +178,15 @@ serializers.table = function(result, x)
   for k, v in pairs(x) do
     serialize(result, k)
     serialize(result, v)
+  end
+end
+
+serializers["function"] = function(result, x)
+  table.insert(result, FUNCTION)
+  local dump = string.dump(x)
+  write_varint(result, #dump)
+  for c in dump:gmatch(".") do
+    table.insert(result, string.byte(c))
   end
 end
 
@@ -215,6 +239,12 @@ deserializers[TABLE] = function(data, i)
   end
 
   return result, i
+end
+
+deserializers[FUNCTION] = function(data, i)
+  local size
+  size, i = read_varint(data, i)
+  return load(data:sub(i, i + size - 1)), i + size
 end
 
 lump_mt.__call = function(_, value)
