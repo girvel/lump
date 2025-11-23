@@ -17,26 +17,31 @@ fw.test("serialization: string", function()
   assert(fw.to_hex(lump("Hello, world!")) == "4C 55 4D 50 20 00 00 00 00 00 00 2A 40 48 65 6C 6C 6F 2C 20 77 6F 72 6C 64 21")
 end)
 
-local pass = function(x)
-  assert(lump.deserialize(lump(x)) == x)
-end
-
 fw.test("pass: number", function()
-  pass(123)
+  fw.pass(123)
 end)
 
 fw.test("pass: zero/one", function()
-  pass(1)
-  pass(0)
+  fw.pass(1)
+  fw.pass(0)
 end)
 
-fw.test("pass: nil", function() pass(nil) end)
+fw.test("pass: nil", function() fw.pass(nil) end)
 
 fw.test("pass: boolean", function()
-  pass(true)
-  pass(false)
+  fw.pass(true)
+  fw.pass(false)
 end)
 
 fw.test("pass: string", function()
-  pass("Hello, world!")
+  fw.pass("Hello, world!")
+end)
+
+fw.test("pass: empty string", function()
+  fw.pass("")
+end)
+
+fw.test("pass: table", function()
+  fw.pass({a = 1})
+  fw.pass({"Hello, world!"})
 end)

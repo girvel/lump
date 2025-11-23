@@ -24,11 +24,34 @@ fw.to_bin = function(str)
   return result
 end
 
+local assert_same
+assert_same = function(x, expected)
+  for k, v in pairs(expected) do
+    assert(type(k) ~= "table")
+    if type(v) == "table" then
+      assert_same(x[k], v)
+    else
+      assert(x[k] == v)
+    end
+  end
+end
+
+--- @param x any
+fw.pass = function(x)
+  local lump = require("init")
+  local copy = lump.deserialize(lump(x))
+  if type(x) == "table" then
+    assert_same(copy, x)
+  else
+    assert(copy == x)
+  end
+end
+
 --- @param name string
 --- @param test fun()
 fw.test = function(name, test)
   io.stdout:write(name .. " ")
-  local ok, msg = pcall(test)
+  local ok, msg = xpcall(test, debug.traceback)
   if ok then
     print("+")
   else

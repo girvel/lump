@@ -5,7 +5,10 @@ local lump = setmetatable({}, lump_mt)
 
 --- @param result number[]
 --- @param x number
-local write_double = function(result, x)
+--- @param i? number
+local write_double = function(result, x, i)
+  i = i or #result + 1
+
   local sign = 0
   if x < 0 then
     sign = 1
@@ -28,15 +31,15 @@ local write_double = function(result, x)
   local exponent_high_bits = math.floor(exponent / 2^4)
   local exponent_low_bits = exponent % 2^4
 
-  table.insert(result, mantissa_low_bits % 2^8)
-  table.insert(result, math.floor(mantissa_low_bits / 2^8) % 2^8)
-  table.insert(result, math.floor(mantissa_low_bits / 2^16) % 2^8)
-  table.insert(result, math.floor(mantissa_low_bits / 2^24) % 2^8)
+  result[i] = mantissa_low_bits % 2^8
+  result[i + 1] = math.floor(mantissa_low_bits / 2^8) % 2^8
+  result[i + 2] = math.floor(mantissa_low_bits / 2^16) % 2^8
+  result[i + 3] = math.floor(mantissa_low_bits / 2^24) % 2^8
 
-  table.insert(result, mantissa_high_bits % 2^8)
-  table.insert(result, math.floor(mantissa_high_bits / 2^8) % 2^8)
-  table.insert(result, exponent_low_bits * 2^4 + math.floor(mantissa_high_bits / 2^16))
-  table.insert(result, sign * 2^7 + exponent_high_bits)
+  result[i + 4] = mantissa_high_bits % 2^8
+  result[i + 5] = math.floor(mantissa_high_bits / 2^8) % 2^8
+  result[i + 6] = exponent_low_bits * 2^4 + math.floor(mantissa_high_bits / 2^16)
+  result[i + 7] = sign * 2^7 + exponent_high_bits
 end
 
 --- @param data string
@@ -67,8 +70,14 @@ local NUMBER = 0x12
 local STRING = 0x20
 local TABLE = 0x22
 
---- @type table<integer, fun(result: number[], x: any)>
+--- @type table<string, fun(result: number[], x: any)>
 local serializers = {}
+
+--- @param result number[]
+--- @param x any
+local serialize = function(result, x)
+  serializers[type(x)](result, x)
+end
 
 serializers["nil"] = function(result, x)
   table.insert(result, NIL)
@@ -91,8 +100,6 @@ serializers.number = function(result, x)
   write_double(result, x)
 end
 
---- @param result number[]
---- @param x string
 serializers.string = function(result, x)
   table.insert(result, STRING)
   write_double(result, #x)
@@ -101,8 +108,35 @@ serializers.string = function(result, x)
   end
 end
 
+serializers.table = function(result, x)
+  table.insert(result, TABLE)
+  local size_i = #result + 1
+  for _ = 1, 8 do
+    table.insert(result, 0)
+  end
+
+  for k, v in pairs(x) do
+    serialize(result, k)
+    serialize(result, v)
+  end
+  write_double(result, #result - size_i - 7, size_i)
+end
+
 --- @type table<integer, fun(data: string, i: integer): any, integer>
 local deserializers = {}
+
+--- @param data string
+--- @param i integer
+--- @return any, integer
+local deserialize = function(data, i)
+  local type_id = data:byte(i)  -- TODO check
+  local deserializer = deserializers[type_id]
+  if not deserializer then
+    error(("Unknown type ID 0x%02X"):format(type_id))
+  end
+
+  return deserializer(data, i + 1)
+end
 
 deserializers[NIL] = function(_, i) return nil, i end
 deserializers[ZERO] = function(_, i) return 0, i end
@@ -120,9 +154,33 @@ deserializers[STRING] = function(data, i)
   return data:sub(i, i + size - 1), i + size
 end
 
+deserializers[TABLE] = function(data, i)
+  local size
+  size, i = read_double(data, i)
+  local start = i
+  local end_i = i + size
+
+  local result = {}
+  while i < end_i do
+    local k, v
+    k, i = deserialize(data, i)
+    v, i = deserialize(data, i)
+    result[k] = v
+  end
+
+  if i ~= end_i then
+    error(string.format(
+      "Table size does not match its contents; ended on byte %i, expected %i (size %i, start %i)",
+      i, end_i, size, start
+    ))
+  end
+
+  return result, i
+end
+
 lump_mt.__call = function(_, value)
   local result = {string.byte("LUMP", 1, 4)}
-  serializers[type(value)](result, value)
+  serialize(result, value)
 
   local str = ""
   for _, e in ipairs(result) do
@@ -138,8 +196,7 @@ lump.deserialize = function(data)
     error(('Expected data to start with "LUMP", got %q instead'):format(magic))
   end
 
-  local type_id = data:byte(5)  -- TODO check
-  local result, end_i = deserializers[type_id](data, 6)
+  local result, end_i = deserialize(data, 5)
   assert(end_i == #data + 1)
   return result
 end
