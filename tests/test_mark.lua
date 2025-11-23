@@ -32,7 +32,7 @@ fw.test("const shouldn't leak into function upvalues, may begin to mark dependen
 end)
 
 fw.test("upvalues can be marked manually", function()
-  local ok, result = pcall(lump.mark_module, "tests.resources.leak_dependent", {
+  local ok = pcall(lump.mark_module, "tests.resources.leak_dependent", {
     f = {
       dependency = "const",
     }

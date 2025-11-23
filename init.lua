@@ -174,9 +174,9 @@ serialize = function(result, cache, x)
   end
 
   do  -- handle override
-    local override = lump.serializer(x)
+    local override, source = lump.serializer(x)
     if override then
-      local override_type, source = type(override)
+      local override_type = type(override)
 
       if override_type == "string" then
         table.insert(result, CODE_STRING)
