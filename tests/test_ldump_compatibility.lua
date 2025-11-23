@@ -52,7 +52,35 @@ fw.test("lump.serializer: function", function()
   lump.serializer = old_serializer
 end)
 
-fw.test("metatable's __serialize returning function", function()
+fw.test("lump.serializer.handlers", function()
+  local t = {value = 1}
+  lump.serializer.handlers[t] = "1"
+  fw.assert_equal(1, fw.pass(t))
+  lump.serializer.handlers[t] = nil
+end)
+
+fw.test("lump.serializer.handlers: threads", function()
+  local thread = coroutine.create(function()
+    coroutine.yield()
+    return 1
+  end)
+  lump.serializer.handlers[thread] = "404"
+  fw.assert_equal(404, fw.pass(thread))
+  lump.serializer.handlers[thread] = nil
+end)
+
+fw.test("lump.serializer.handlers: caching", function()
+  local f = coroutine.wrap(function() end)
+  local to_serialize = {a = f, b = f}
+  lump.serializer.handlers[f] = function() return {} end
+
+  local copy = fw.pass(to_serialize)
+  fw.assert_equal(copy.a, copy.b)
+
+  lump.serializer.handlers[f] = nil
+end)
+
+fw.test("__serialize", function()
   local t = setmetatable({a = 1}, {
     __serialize = function(self)
       local a = self.a
@@ -64,6 +92,5 @@ fw.test("metatable's __serialize returning function", function()
 
   fw.assert_equal(fw.pass(t), 1)
 end)
-
 
 -- TODO just straight translation of lump's tests

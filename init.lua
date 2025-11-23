@@ -150,6 +150,7 @@ local FUNCTION = 0x24
 local REF = 0x25
 local CODE_STRING = 0x26
 local CODE = 0x27
+local CODE_REF = 0x28
 
 -- NOTICE must be bigger than 4, or it would collide with cache.size
 local BIG_STRING_THRESHOLD = 32
@@ -187,6 +188,9 @@ serialize = function(result, cache, x)
 
       if override_type == "function" then
         table.insert(result, CODE)
+        cache.size = cache.size + 1
+        cache[x] = cache.size
+        write_varint(result, cache.size)
         serialize(result, cache, override)
         return
       end
@@ -460,9 +464,16 @@ deserializers[CODE_STRING] = function(data, _, i)
 end
 
 deserializers[CODE] = function(data, cache, i)
+  local cache_id
+  cache_id, i = read_varint(data, i)
+
   local code
   code, i = deserialize(data, cache, i)
-  return code(), i
+
+  local result = code()
+  cache[cache_id] = result
+
+  return result, i
 end
 
 lump_mt.__call = function(_, value)
@@ -496,10 +507,17 @@ lump.deserialize = function(data)
   return result
 end
 
-lump.serializer = setmetatable({}, {
+lump.serializer = setmetatable({
+  handlers = {},
+}, {
   __call = function(self, x)
+    local handler = self.handlers[x]
+    if handler then
+      return handler, "`lump.serializer.handlers`"
+    end
+
     local mt = getmetatable(x)
-    local handler = mt and mt.__serialize and mt.__serialize(x)
+    handler = mt and mt.__serialize and mt.__serialize(x)
     if handler then
       return handler, "`getmetatable(x).__serialize(x)`"
     end
