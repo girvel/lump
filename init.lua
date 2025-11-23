@@ -498,6 +498,11 @@ end
 
 lump.serializer = setmetatable({}, {
   __call = function(self, x)
+    local mt = getmetatable(x)
+    local handler = mt and mt.__serialize and mt.__serialize(x)
+    if handler then
+      return handler, "`getmetatable(x).__serialize(x)`"
+    end
   end,
 })
 

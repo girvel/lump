@@ -52,18 +52,18 @@ fw.test("lump.serializer: function", function()
   lump.serializer = old_serializer
 end)
 
--- fw.test("metatable's __serialize returning function", function()
---   local t = setmetatable({a = 1}, {
---     __serialize = function(self)
---       local a = self.a
---       return function()
---         return a
---       end
---     end
---   })
--- 
---   fw.assert_equal(fw.pass(t), 1)
--- end)
+fw.test("metatable's __serialize returning function", function()
+  local t = setmetatable({a = 1}, {
+    __serialize = function(self)
+      local a = self.a
+      return function()
+        return a
+      end
+    end
+  })
+
+  fw.assert_equal(fw.pass(t), 1)
+end)
 
 
 -- TODO just straight translation of lump's tests
