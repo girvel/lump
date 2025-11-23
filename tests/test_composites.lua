@@ -38,4 +38,13 @@ fw.test("check collision with cache.size", function()
   fw.pass({a = "size", b = "size"})
 end)
 
--- TODO i8
+-- TODO function circular references?
+fw.test("pass: table circular references", function()
+  local t = {a = {}, b = {}}
+  t.a.b = t.b
+  t.b.a = t.a
+  local result = fw.pass(t)
+  fw.assert_same(t, result)
+  fw.assert_equal(result.a.b, result.b)
+  fw.assert_equal(result.b.a, result.a)
+end)

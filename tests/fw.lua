@@ -24,23 +24,36 @@ fw.to_bin = function(str)
   return result
 end
 
-fw.assert_same = function(x, expected)
+fw.assert_same = function(x, expected, seen)
+  seen = seen or {}
+  if x ~= nil then
+    if seen[x] then
+      return true
+    else
+      seen[x] = true
+    end
+  end
+
   if type(x) == "function" then
     local x_result = x()
     local expected_result = expected()
 
-    fw.assert_same(expected_result, x_result)
+    fw.assert_same(expected_result, x_result, seen)
     return
   end
 
   if type(x) == "table" then
     for k, v in pairs(expected) do
       assert(type(k) ~= "table")
-      fw.assert_same(x[k], v)
+      fw.assert_same(x[k], v, seen)
     end
     return
   end
 
+  fw.assert_equal(x, expected)
+end
+
+fw.assert_equal = function(x, expected)
   if x ~= expected then
     error(("Expected %s, got %s"):format(expected, x))
   end

@@ -314,6 +314,8 @@ deserializers[TABLE] = function(data, cache, i)
   size, i = read_varint(data, i)
 
   local result = {}
+  cache[cache_id] = result
+
   for _ = 1, size do
     local k, v
     k, i = deserialize(data, cache, i)
@@ -321,7 +323,6 @@ deserializers[TABLE] = function(data, cache, i)
     result[k] = v
   end
 
-  cache[cache_id] = result
   return result, i
 end
 
@@ -331,9 +332,10 @@ deserializers[FUNCTION] = function(data, cache, i)
 
   local size
   size, i = read_varint(data, i)
-  local result = load(data:sub(i, i + size - 1))
 
+  local result = load(data:sub(i, i + size - 1))
   cache[cache_id] = result
+
   return result, i + size
 end
 
