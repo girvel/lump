@@ -37,12 +37,28 @@ local write_double = function(result, x)
   table.insert(result, sign * 2^7 + exponent_high_bits)
 end
 
-lump_mt.__call = function(_, value)
-  assert(type(value) == "number")
+local handlers = {}
 
-  local result = {string.byte("LUMP", 1, 4)}
+--- @param result number[]
+--- @param x number
+handlers.number = function(result, x)
   table.insert(result, 0x12)
-  write_double(result, value)
+  write_double(result, x)
+end
+
+--- @param result number[]
+--- @param x string
+handlers.string = function(result, x)
+  table.insert(result, 0x20)
+  write_double(result, #x)
+  for char in x:gmatch(".") do
+    table.insert(result, string.byte(char))
+  end
+end
+
+lump_mt.__call = function(_, value)
+  local result = {string.byte("LUMP", 1, 4)}
+  handlers[type(value)](result, value)
 
   local str = ""
   for _, e in ipairs(result) do
@@ -73,5 +89,7 @@ end
 
 print(to_bin(lump(1.0)))
 print(to_bin(lump(-2.0)))
+print(to_bin(lump("Hello, world!")))
+print(("%q"):format(lump("Hello, world!")))
 
 return lump
