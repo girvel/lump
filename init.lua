@@ -204,9 +204,15 @@ end
 
 serializers["function"] = function(result, cache, x)
   table.insert(result, FUNCTION)
+
+  cache.size = cache.size + 1
+  cache[x] = cache.size
+  write_varint(result, cache.size)
+
   local dump = string.dump(x)
   local len = #dump
   write_varint(result, len)
+
   for i = 1, len do
     table.insert(result, dump:byte(i))
   end
@@ -270,10 +276,16 @@ deserializers[TABLE] = function(data, cache, i)
   return result, i
 end
 
-deserializers[FUNCTION] = function(data, _, i)
+deserializers[FUNCTION] = function(data, cache, i)
+  local cache_id
+  cache_id, i = read_varint(data, i)
+
   local size
   size, i = read_varint(data, i)
-  return load(data:sub(i, i + size - 1)), i + size
+  local result = load(data:sub(i, i + size - 1))
+
+  cache[cache_id] = result
+  return result, i + size
 end
 
 deserializers[REF] = function(data, cache, i)
@@ -282,6 +294,7 @@ deserializers[REF] = function(data, cache, i)
   return cache[id], i
 end
 
+-- TODO __call returns load-able string, .serialize does this
 lump_mt.__call = function(_, value)
   local result = {string.byte("LUMP", 1, 4)}
   serialize(result, {size = 0}, value)

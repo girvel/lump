@@ -25,14 +25,24 @@ fw.to_bin = function(str)
 end
 
 fw.assert_same = function(x, expected)
-  if type(x) ~= "table" then
-    assert(x == expected)
+  if type(x) == "function" then
+    local x_result = x()
+    local expected_result = expected()
+
+    fw.assert_same(expected_result, x_result)
     return
   end
 
-  for k, v in pairs(expected) do
-    assert(type(k) ~= "table")
-    fw.assert_same(x[k], v)
+  if type(x) == "table" then
+    for k, v in pairs(expected) do
+      assert(type(k) ~= "table")
+      fw.assert_same(x[k], v)
+    end
+    return
+  end
+
+  if x ~= expected then
+    error(("Expected %s, got %s"):format(expected, x))
   end
 end
 
@@ -45,19 +55,9 @@ fw.pass = function(x)
 end
 
 --- @param x any
-fw.assert_pass = function(x, ...)
+fw.assert_pass = function(x)
   local lump = require("init")
-  local dump = lump(x)
-  local copy = lump.deserialize(dump)
-  if type(x) == "table" then
-    fw.assert_same(copy, x)
-  elseif type(x) == "function" then
-    fw.assert_same(copy(...), x(...))
-  else
-    if copy ~= x then
-      error(("Expected %s to stay the same, got %s instead\n%s"):format(x, copy, fw.to_hex(dump)))
-    end
-  end
+  fw.assert_same(lump.deserialize(lump(x)), x)
 end
 
 --- @param name string
