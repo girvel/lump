@@ -4,7 +4,7 @@ local load
 if _VERSION == "Lua 5.1" then
   load = loadstring
 else
-  load = load
+  load = _G.load
 end
 local unpack = unpack or table.unpack
 
@@ -36,15 +36,17 @@ end
 --- @return integer, integer
 local read_varint = function(data, i)
   local result = 0
+  local multiplier = 1
   while true do
     local byte = data:byte(i)
     i = i + 1
 
     if byte < 128 then
-      result = result * 128 + byte
+      result = result + byte * multiplier
       break
     else
-      result = result * 128 + byte - 128
+      result = result + (byte - 128) * multiplier
+      multiplier = multiplier * 128
     end
   end
   return result, i
@@ -161,9 +163,10 @@ end
 
 serializers.string = function(result, x)
   table.insert(result, STRING)
-  write_varint(result, #x)
-  for char in x:gmatch(".") do
-    table.insert(result, string.byte(char))
+  local len = #x
+  write_varint(result, len)
+  for i = 1, len do
+    table.insert(result, x:byte(i))
   end
 end
 
@@ -184,9 +187,10 @@ end
 serializers["function"] = function(result, x)
   table.insert(result, FUNCTION)
   local dump = string.dump(x)
-  write_varint(result, #dump)
-  for c in dump:gmatch(".") do
-    table.insert(result, string.byte(c))
+  local len = #dump
+  write_varint(result, len)
+  for i = 1, len do
+    table.insert(result, dump:byte(i))
   end
 end
 
@@ -266,7 +270,9 @@ lump.deserialize = function(data)
   end
 
   local result, end_i = deserialize(data, 5)
-  assert(end_i == #data + 1)
+  if end_i ~= #data + 1 then
+    error(("Read %s bytes, got %s total"):format(end_i - 1, #data))
+  end
   return result
 end
 
