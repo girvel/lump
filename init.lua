@@ -502,11 +502,16 @@ lump.serialize = function(value)
   local result = {string.byte("LUMP", 1, 4)}
   serialize(result, {size = 0}, value)
 
-  local str = ""
-  for _, e in ipairs(result) do
-    str = str .. string.char(e)
+  local CHUNK_SIZE = 4096  -- TODO lump.serialization_chunk_size
+  local parts = {}
+  local len = #result
+
+  for i = 1, len, CHUNK_SIZE do
+    local j = math.min(i + CHUNK_SIZE - 1, len)
+    table.insert(parts, string.char(unpack(result, i, j)))
   end
-  return str
+
+  return table.concat(parts)
 end
 
 --- @param data string
@@ -722,5 +727,9 @@ mark = function(value, modname, schema)
     validate_keys(value, modname, potential_unserializable_keys)
   end
 end
+
+lump.get_warnings = function() return {} end
+lump.ignore_upvalue_size = function(x) return x end
+lump.ignore_size = function(x) return x end
 
 return lump
