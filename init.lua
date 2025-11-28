@@ -352,15 +352,28 @@ serializers.table = function(result, cache, x)
   cache[x] = cache.size
   write_varint(result, cache.size)
 
+  local length = #x
+  write_varint(result, length)
+
+  for _, v in ipairs(x) do
+    serialize(result, cache, v)
+  end
+
   local size = 0
   for _ in pairs(x) do
     size = size + 1
   end
-  write_varint(result, size)
+  write_varint(result, size - length)
 
   for k, v in pairs(x) do
-    serialize(result, cache, k)
-    serialize(result, cache, v)
+    if type(k) ~= "number"
+      or k % 1 ~= 0
+      or k < 1
+      or k > length
+    then
+      serialize(result, cache, k)
+      serialize(result, cache, v)
+    end
   end
 
   if mt then
@@ -427,7 +440,11 @@ deserialize = function(data, cache, i)
   local type_id = data:byte(i)
   local deserializer = deserializers[type_id]
   if not deserializer then
-    error(("Unknown type ID 0x%02X"):format(type_id))
+    if not type_id then
+      error(("Byte %s out of bounds"):format(i))
+    else
+      error(("Unknown type ID 0x%02X"):format(type_id))
+    end
   end
 
   return deserializer(data, cache, i + 1)
@@ -476,11 +493,20 @@ deserializers[TABLE] = function(data, cache, i)
   local cache_id
   cache_id, i = read_varint(data, i)
 
-  local size
-  size, i = read_varint(data, i)
+  local length
+  length, i = read_varint(data, i)
 
   local result = {}
   cache[cache_id] = result
+
+  for _ = 1, length do
+    local v
+    v, i = deserialize(data, cache, i)
+    table.insert(result, v)
+  end
+
+  local size
+  size, i = read_varint(data, i)
 
   for _ = 1, size do
     local k, v
