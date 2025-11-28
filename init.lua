@@ -343,7 +343,6 @@ serializers.string = function(result, cache, x)
   write_string(result, x)
 end
 
---- TODO ipairs optimization
 serializers.table = function(result, cache, x)
   local mt = getmetatable(x)
 
@@ -352,7 +351,10 @@ serializers.table = function(result, cache, x)
   cache[x] = cache.size
   write_varint(result, cache.size)
 
-  local length = #x
+  local length = 0
+  for _ in ipairs(x) do
+    length = length + 1
+  end
   write_varint(result, length)
 
   for _, v in ipairs(x) do

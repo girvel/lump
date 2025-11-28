@@ -75,6 +75,10 @@ fw.test("pass: table with metatable", function()
   fw.assert_equal(1, fw.pass(t)())
 end)
 
+fw.test("pass: sequence with holes", function()
+  fw.assert_pass({1, 2, nil, 4})
+end)
+
 fw.test("pass: function with upvalues (closure)", function()
   local a = 1
   local b = 2
