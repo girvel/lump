@@ -1,13 +1,88 @@
---- @diagnostic disable:inject-field
-
-local load = loadstring or load
-local unpack = unpack or table.unpack
+----------------------------------------------------------------------------------------------------
+-- [SECTION] API
+----------------------------------------------------------------------------------------------------
 
 local lump_mt = {}
 --- @overload fun(x: any): string
 local lump = setmetatable({}, lump_mt)
 
 lump.require_path = ...
+
+local serialize, deserialize
+
+--- @param value any
+--- @return string
+lump.serialize = function(value)
+  local result = {string.byte("LUMP", 1, 4)}
+  serialize(result, {size = 0}, value)
+
+  local CHUNK_SIZE = 4096  -- TODO lump.serialization_chunk_size
+  local parts = {}
+  local len = #result
+
+  for i = 1, len, CHUNK_SIZE do
+    local j = math.min(i + CHUNK_SIZE - 1, len)
+    table.insert(parts, string.char(unpack(result, i, j)))
+  end
+
+  return table.concat(parts)
+end
+
+--- @param data string
+lump.deserialize = function(data)
+  local magic = data:sub(1, 4)
+  if magic ~= "LUMP" then
+    error(('Expected data to start with "LUMP", got %q instead'):format(magic))
+  end
+
+  local result, end_i = deserialize(data, {}, 5)
+  if end_i ~= #data + 1 then
+    error(("Read %s bytes, got %s total"):format(end_i - 1, #data))
+  end
+  return result
+end
+
+lump.serializer = setmetatable({
+  handlers = setmetatable({}, {__mode = "k"}),
+}, {
+  __call = function(self, x)
+    local handler = self.handlers[x]
+    if handler then
+      return handler, "`lump.serializer.handlers`"
+    end
+
+    local mt = getmetatable(x)
+    handler = mt and mt.__serialize and mt.__serialize(x)
+    if handler then
+      return handler, "`getmetatable(x).__serialize(x)`"
+    end
+  end,
+})
+
+local mark
+
+lump.mark = function(module, schema, modname)
+  mark(module, modname, schema)
+  return module
+end
+
+lump.mark_module = function(modname, schema)
+  mark(require(modname), modname, schema)
+end
+
+lump.get_warnings = function() return {} end
+lump.ignore_upvalue_size = function(x) return x end
+lump.ignore_size = function(x) return x end
+
+
+----------------------------------------------------------------------------------------------------
+-- [SECTION] Backend
+----------------------------------------------------------------------------------------------------
+
+--- @diagnostic disable:inject-field
+
+local load = loadstring or load
+local unpack = unpack or table.unpack
 
 --- @param result integer[]
 --- @param x integer
@@ -152,6 +227,11 @@ local CODE_STRING = 0x26
 local CODE = 0x27
 local ENV = 0x28
 
+
+----------------------------------------------------------------------------------------------------
+-- [SECTION] Serialization
+----------------------------------------------------------------------------------------------------
+
 -- NOTICE must be bigger than 4, or it would collide with cache.size
 local BIG_STRING_THRESHOLD = 32
 
@@ -160,8 +240,6 @@ local BIG_STRING_THRESHOLD = 32
 
 --- @type table<string, fun(result: number[], cache: serialization_cache, x: any)>
 local serializers = {}
-
-local serialize
 
 --- @param result number[]
 --- @param cache serialization_cache
@@ -331,6 +409,11 @@ serializers["function"] = function(result, cache, x)
   end
 end
 
+
+----------------------------------------------------------------------------------------------------
+-- [SECTION] Deserialization
+----------------------------------------------------------------------------------------------------
+
 --- @alias deserialization_cache table<integer, any>
 
 --- @type table<integer, fun(data: string, cache: deserialization_cache, i: integer): any, integer>
@@ -340,7 +423,7 @@ local deserializers = {}
 --- @param cache deserialization_cache
 --- @param i integer
 --- @return any, integer
-local deserialize = function(data, cache, i)
+deserialize = function(data, cache, i)
   local type_id = data:byte(i)
   local deserializer = deserializers[type_id]
   if not deserializer then
@@ -492,68 +575,13 @@ deserializers[ENV] = function(data, cache, i)
   return _ENV or _G, i
 end
 
+
+--------------------------------------------------------------------------------------------------
+-- [SECTION] Marking & compatibility
+--------------------------------------------------------------------------------------------------
+
 lump_mt.__call = function(_, value)
   return ("return require(%q).deserialize(%q)"):format(lump.require_path, lump.serialize(value))
-end
-
---- @param value any
---- @return string
-lump.serialize = function(value)
-  local result = {string.byte("LUMP", 1, 4)}
-  serialize(result, {size = 0}, value)
-
-  local CHUNK_SIZE = 4096  -- TODO lump.serialization_chunk_size
-  local parts = {}
-  local len = #result
-
-  for i = 1, len, CHUNK_SIZE do
-    local j = math.min(i + CHUNK_SIZE - 1, len)
-    table.insert(parts, string.char(unpack(result, i, j)))
-  end
-
-  return table.concat(parts)
-end
-
---- @param data string
-lump.deserialize = function(data)
-  local magic = data:sub(1, 4)
-  if magic ~= "LUMP" then
-    error(('Expected data to start with "LUMP", got %q instead'):format(magic))
-  end
-
-  local result, end_i = deserialize(data, {}, 5)
-  if end_i ~= #data + 1 then
-    error(("Read %s bytes, got %s total"):format(end_i - 1, #data))
-  end
-  return result
-end
-
-lump.serializer = setmetatable({
-  handlers = setmetatable({}, {__mode = "k"}),
-}, {
-  __call = function(self, x)
-    local handler = self.handlers[x]
-    if handler then
-      return handler, "`lump.serializer.handlers`"
-    end
-
-    local mt = getmetatable(x)
-    handler = mt and mt.__serialize and mt.__serialize(x)
-    if handler then
-      return handler, "`getmetatable(x).__serialize(x)`"
-    end
-  end,
-})
-
-local mark
-
-lump.mark = function(module, schema, modname)
-  mark(module, modname, schema)
-  return module
-end
-
-lump.mark_module = function(modname, schema)
-  mark(require(modname), modname, schema)
 end
 
 local reference_types = {
@@ -727,9 +755,5 @@ mark = function(value, modname, schema)
     validate_keys(value, modname, potential_unserializable_keys)
   end
 end
-
-lump.get_warnings = function() return {} end
-lump.ignore_upvalue_size = function(x) return x end
-lump.ignore_size = function(x) return x end
 
 return lump
